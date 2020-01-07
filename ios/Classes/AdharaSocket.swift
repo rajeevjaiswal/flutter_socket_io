@@ -4,7 +4,6 @@
 //
 //  Created by soumya thatipamula on 19/11/18.
 //
-
 import Foundation
 
 
@@ -28,7 +27,12 @@ public class AdharaSocket: NSObject, FlutterPlugin {
 
     public init(_ channel:FlutterMethodChannel, _ config:AdharaSocketIOClientConfig) {
         manager = SocketManager(socketURL: URL(string: config.uri)!, config: [.log(true),.forceWebsockets(true),.path(config.path), .connectParams(config.query)])
-        socket = manager.defaultSocket
+        if(config.namespace == "") {
+                    socket = manager.defaultSocket
+                } else {
+                    socket = manager.socket(forNamespace: config.namespace ?? "/")
+                }
+
         self.channel = channel
         self.config = config
     }
@@ -71,8 +75,18 @@ public class AdharaSocket: NSObject, FlutterPlugin {
             case "emit":
                 let eventName: String = arguments["eventName"] as! String
                 let data: [Any] = arguments["arguments"] as! [Any]
+                let reqId: String? = arguments["reqId"] as? String
                 self.log("emitting:::", data, ":::to:::", eventName);
-                socket.emit(eventName, with: data)
+                if (reqId == nil) {
+                    socket.emit(eventName, with: data)
+                } else {
+                    socket.emitWithAck(eventName, with: data).timingOut(after: 0) { data in
+                        self.channel.invokeMethod("incomingAck", arguments: [
+                            "args": data,
+                            "reqId": reqId
+                        ]);
+                    }
+                }
                 result(nil)
             case "isConnected":
                 self.log("connected")
@@ -96,14 +110,18 @@ public class AdharaSocketIOClientConfig: NSObject{
     
     let adharaId:Int
     let uri:String
+    public var namespace:String?
     public var query:[String:String]
+    public var path:String
     public var enableLogging:Bool
     public var path:String
 
-    init(_ adharaId:Int, uri:String) {
+    init(_ adharaId:Int, uri:String, namespace:String, path:String) {
         self.adharaId = adharaId
         self.uri = uri
+        self.namespace = namespace
         self.query = [String:String]()
+        self.path = path
         self.enableLogging = false
         self.path = String()
     }

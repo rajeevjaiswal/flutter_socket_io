@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'dart:convert' show jsonDecode;
+import 'dart:async';
 
 typedef void SocketEventListener(dynamic data);
 
@@ -48,6 +49,10 @@ class SocketIO {
   ///Store listeners
   Map<String, List<Function>> _listeners = {};
 
+  ///Store Completers for pending Acks
+  Map<String, Completer> _pendingAcks = {};
+  int _reqCounter = 0;
+
   ///Method channel to interact with android/iOS
   final MethodChannel _channel;
 
@@ -55,11 +60,38 @@ class SocketIO {
   SocketIO(this.id)
       : _channel =
             new MethodChannel("adhara_socket_io:socket:${id.toString()}") {
-    _channel.setMethodCallHandler((call) {
+    _channel.setMethodCallHandler((call) async {
       if (call.method == 'incoming') {
         final String eventName = call.arguments['eventName'];
         final List<dynamic> arguments = call.arguments['args'];
         _handleData(eventName, arguments);
+      }
+      if (call.method == 'incomingAck') {
+        List<dynamic> arguments = call.arguments['args'];
+        final String reqId = call.arguments['reqId'];
+        if (reqId == null) {
+          return;
+        }
+        final completer = _pendingAcks.remove(reqId);
+        if (completer == null) {
+          return;
+        }
+
+        if (arguments.length == 0) {
+          arguments = [null];
+        } else {
+          arguments = arguments.where((_) {
+            //TODO this works around difference in ios (doesn't eat nulls) and android (eats nulls)
+            return _ != null;
+          }).map((_) {
+            try {
+              return jsonDecode(_);
+            } catch (e) {
+              return _;
+            }
+          }).toList();
+        }
+        completer.complete(arguments);
       }
     });
   }
@@ -73,6 +105,8 @@ class SocketIO {
   on(String eventName, SocketEventListener listener) async {
     if (_listeners[eventName] == null) {
       _listeners[eventName] = [];
+    }
+    if(_listeners[eventName].length == 0){
       _channel.invokeMethod("on", {"eventName": eventName});
     }
     _listeners[eventName].add(listener);
@@ -97,6 +131,20 @@ class SocketIO {
       'eventName': eventName,
       'arguments': arguments,
     });
+  }
+
+  ///send data to socket server, return expected Ack as a Future
+  Future emitWithAck(String eventName, List<dynamic> arguments) async {
+    String reqId = (++_reqCounter).toString();
+    await _channel.invokeMethod('emit',
+        {'eventName': eventName, 'arguments': arguments, 'reqId': reqId});
+    var completer = new Completer();
+    _pendingAcks[reqId] = completer;
+    return completer.future;
+  }
+
+  Future<bool> isConnected() async {
+    return await _channel.invokeMethod('isConnected');
   }
 
   ///Data listener called by platform API

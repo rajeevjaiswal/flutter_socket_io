@@ -11,7 +11,13 @@ See `example/lib/main.dart` for better example
 
 ```dart
     SocketIOManager manager = SocketIOManager();
-    SocketIO socket = manager.createInstance('http://192.168.1.2:7000/');       //TODO change the port  accordingly
+    SocketIO socket = manager.createInstance(
+    SocketOptions('http://192.168.1.12:5555', //TODO change the port  accordingly
+        nameSpace: '/yournamespace',
+        enableLogging: true,
+        transports: [Transports.POLLING])
+    );
+    
     socket.onConnect((data){
       print("connected...");
       print(data);
@@ -27,6 +33,14 @@ See `example/lib/main.dart` for better example
 
 ```
 
+To request callback on ack:
+```dart
+  socket.emitWithAck("message", ["Hello world!"]).then( (data) {
+    // this callback runs when this specific message is acknowledged by the server
+    print(data);
+  });
+```
+
 ## Running example:
 
 
@@ -37,10 +51,58 @@ See `example/lib/main.dart` for better example
 
 	2 run `npm start`
 
-3. open `example/lib/main.dart` and edit the URI in #7 to point to your hosted/local socket server instances as mentioned step 2
+3. open `example/lib/main.dart` and edit the `URI` in #7 to point to your hosted/local socket server instances as mentioned step 2
+    
+    For example:
+        
+    ```dart
+    const String URI = "http://192.168.1.2:7000/";
+    ```
+        
+    ```dart
+    const String URI = "http://mysite.com/";
+    ```
+    
 4. run Android/iOS app
 
 ## iOS support 📢📢
 This project uses Swift for iOS support, please enable Swift support for your project for this plugin to work
+
+
+## Android support for SDK > 27
+
+Configure `android:usesCleartextTraffic="true"` as a property of `<application ...>` tag in `android/app/src/main/AndroidManifest.xml`
+
+For example:
+    
+```xml
+
+<application
+        android:name="io.flutter.app.FlutterApplication"
+        android:label="adhara_socket_io_example"
+        android:usesCleartextTraffic="true"
+        android:icon="@mipmap/ic_launcher">
+        <activity
+            android:name=".MainActivity"...>...</activity>
+
+```
+
+[Refer to discussion here](https://github.com/infitio/flutter_socket_io/issues/42)
+
+## Sample Video - Running the example
+
+[![Running adhara socket io for flutter, example](https://img.youtube.com/vi/rc6Kv95FJ4M/0.jpg)](http://www.youtube.com/watch?v=rc6Kv95FJ4M "Running the example")
+
+
+## FAQ's
+
+##### AdharaSocketIoPlugin.m:2:9: fatal error: 'adhara_socket_io/adhara_socket_io-Swift.h' file not found
+add `use_frameworks!` to your Podfile as in the example
+https://github.com/infitio/flutter_socket_io/blob/master/example/ios/Podfile#L30
+
+[Read more about this discussion](https://github.com/infitio/flutter_socket_io/issues/58)
+
+
+## Other Packages:
 
 Feel free to checkout our [Adhara](https://pub.dartlang.org/packages/adhara) package

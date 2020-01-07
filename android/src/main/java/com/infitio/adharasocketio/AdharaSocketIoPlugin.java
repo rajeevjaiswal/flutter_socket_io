@@ -6,6 +6,7 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
@@ -19,7 +20,8 @@ import io.flutter.plugin.common.PluginRegistry.Registrar;
  */
 public class AdharaSocketIoPlugin implements MethodCallHandler {
 
-    private List<AdharaSocket> instances;
+    private Map<Integer, AdharaSocket> instances;
+    private int currentIndex;
 //    private final MethodChannel channel;
     private final Registrar registrar;
     private static final String TAG = "Adhara:SocketIOPlugin";
@@ -32,7 +34,8 @@ public class AdharaSocketIoPlugin implements MethodCallHandler {
     }
 
     private AdharaSocketIoPlugin(Registrar registrar/*, MethodChannel channel*/) {
-        this.instances = new ArrayList<>();
+        this.instances = new HashMap<Integer, AdharaSocket>();
+        this.currentIndex = 0;
 //        this.channel = channel;
         this.registrar = registrar;
     }
@@ -52,31 +55,24 @@ public class AdharaSocketIoPlugin implements MethodCallHandler {
 
     @Override
     public void onMethodCall(MethodCall call, Result result) {
-        AdharaSocket adharaSocket = null;
-        if(call.hasArgument("id")){
-            Integer socketIndex = call.argument("id");
-            if(socketIndex!=null) {
-                if (instances.size() > socketIndex) {
-                    adharaSocket = instances.get(socketIndex);
-                }
-            }
-        }
         switch (call.method) {
             case "newInstance": {
                 try{
                     if(call.hasArgument("enableLogging")){
                         this.enableLogging = call.argument("enableLogging");
                     }
-                    int newIndex = instances.size();
-                    AdharaSocket.Options options = new AdharaSocket.Options(newIndex, (String)call.argument("uri"));
+                    AdharaSocket.Options options = new AdharaSocket.Options(this.currentIndex, (String)call.argument("uri"));
                     try {
                         List<String> transports = call.argument("transports");
                         if (transports != null) {
                             options.transports = AdharaSocketIoPlugin.getStringArray(transports);
                         }
-                        options.timeout = (Long) call.argument("timeout");
+                        options.timeout = ((Number) call.argument("timeout")).longValue();
                     }catch (Exception e){
                         Log.e(TAG, e.toString());
+                    }
+                    if (call.hasArgument("namespace")) {
+                        options.namespace = call.argument("namespace");
                     }
                     if(call.hasArgument("query")) {
                         Map<String, String> _query = call.argument("query");
@@ -91,25 +87,30 @@ public class AdharaSocketIoPlugin implements MethodCallHandler {
                             options.query = sb.toString();
                         }
                     }
-                    options.enableLogging = this.enableLogging;
-                    if(call.hasArgument("path")){
+                    if (call.hasArgument("path")) {
                         options.path = call.argument("path");
                     }
-                    this.instances.add(AdharaSocket.getInstance(registrar, options));
-                    result.success(newIndex);
+                    options.enableLogging = this.enableLogging;
+                    this.instances.put(this.currentIndex, AdharaSocket.getInstance(registrar, options));
+                    result.success(this.currentIndex++);
                 }catch (URISyntaxException use){
                     result.error(use.toString(), null, null);
                 }
                 break;
             }
             case "clearInstance": {
-                if(adharaSocket==null){
+                if(!call.hasArgument("id") || call.argument("id") == null) {
                     result.error("Invalid instance identifier provided", null, null);
-                    break;
+                } else {
+                    Integer socketIndex = call.argument("id");
+                    if (this.instances.containsKey(socketIndex)) {
+                        this.instances.get(socketIndex).socket.disconnect();
+                        this.instances.remove(socketIndex);
+                        result.success(null);
+                    } else {
+                        result.error("Instance not found", null, null);
+                    }
                 }
-                this.instances.remove(adharaSocket);
-                adharaSocket.socket.disconnect();
-                result.success(null);
                 break;
             }
             default: {
