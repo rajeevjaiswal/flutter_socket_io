@@ -41,7 +41,6 @@ public class SwiftAdharaSocketIoPlugin: NSObject, FlutterPlugin {
                                     config.path = path
                                 }
 
-                instances.append(AdharaSocket.getInstance(registrar, config))
                 instances[newIndex] = AdharaSocket.getInstance(registrar, config)
                 currentIndex += 1
                 result(newIndex)

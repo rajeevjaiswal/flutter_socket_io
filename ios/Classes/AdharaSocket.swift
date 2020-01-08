@@ -121,7 +121,6 @@ public class AdharaSocketIOClientConfig: NSObject{
         self.uri = uri
         self.namespace = namespace
         self.query = [String:String]()
-        self.path = path
         self.enableLogging = false
         self.path = String()
     }
